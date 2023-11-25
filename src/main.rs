@@ -1,7 +1,9 @@
 use std::env;
 use std::io::stdin;
 
-const CONFIG_FILE: &str = ".xp-cli-cli-rust.yml";
+// @TODO: Use serde to parse yaml config file (and consider JSON format?)
+
+const CONFIG_FILE: &str = ".xp-cli-rust.yml";
 
 fn main() {
 
@@ -14,9 +16,8 @@ fn main() {
         _ => println!("Invalid command"),
     }
 
-    // Get domain_suffix from the config content
     let merlin_api_token = get_config_value("merlin_api_token");
-    println!("merlin_api_token: {}", merlin_api_token);
+    println!("Merlin API token, retrieved from config file: {}", merlin_api_token);
 }
 
 fn get_first_command_line_input() -> String {

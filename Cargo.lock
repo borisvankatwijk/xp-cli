@@ -3,5 +3,5 @@
 version = 3
 
 [[package]]
-name = "xp-cli"
+name = "xp_cli"
 version = "0.1.0"

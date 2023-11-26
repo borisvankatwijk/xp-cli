@@ -1,5 +1,7 @@
 use std::env;
 use std::io::stdin;
+use std::error::Error;
+use std::process;
 
 // @TODO: Use serde to parse yaml config file (and consider JSON format?)
 
@@ -12,10 +14,13 @@ fn main() {
     let args: Vec<String> = env::args().collect();
     let command = Command::build(&args).unwrap_or_else(|err| {
         println!("Problem parsing arguments: {}", err);
-        std::process::exit(1);
+        process::exit(1);
     });
 
-    run(command);
+    if let Err(e) = run(command) {
+        println!("Application error: {e}");
+        process::exit(1);
+    }
 }
 
 struct Command {
@@ -56,7 +61,7 @@ impl Command {
     }
 }
 
-fn run(command: Command) {
+fn run(command: Command) -> Result<(), Box<dyn Error>> {
     match command {
         Command { name, description, action } => {
             println!("Command name: {}", name);
@@ -71,6 +76,7 @@ fn run(command: Command) {
 
     let merlin_api_token = get_config_value("merlin_api_token");
     println!("Merlin API token, retrieved from config file: {}", merlin_api_token);
+    Ok(())
 }
 
 fn import() {

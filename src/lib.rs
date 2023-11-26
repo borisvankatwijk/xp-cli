@@ -95,8 +95,8 @@ fn get_config() -> String {
     match read_file_content(&config_file) {
         Ok(content) => content,
         Err(e) => {
-            println!("{}: {}", e, config_file);
-            println!("Creating config file...");
+            eprintln!("Reading file failed: {}", e);
+            println!("Config file not loaded, creating one at {}", config_file);
             create_config_file()
         }
     }
@@ -119,5 +119,6 @@ lastname: Developer
     match std::fs::write(config_file, config_content.clone()) {
         Ok(_) => config_content.to_string(),
         Err(e) => panic!("Error creating config file: {}", e),
+        // @TODO: Remove panic and handle error gracefully
     }
 }

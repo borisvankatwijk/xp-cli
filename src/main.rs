@@ -9,30 +9,77 @@ fn main() {
 
     // @TODO: Make use of clap library to parse command line arguments
 
-    match get_first_command_line_input().as_str() {
-        "import" => import(),
-        "update" => update(),
-        "list" => println!("List command"),
-        _ => println!("Invalid command"),
+    let args: Vec<String> = env::args().collect();
+    let command = Command::build(&args).unwrap_or_else(|err| {
+        println!("Problem parsing arguments: {}", err);
+        std::process::exit(1);
+    });
+
+    run(command);
+}
+
+struct Command {
+    name: String,
+    description: String,
+    action: CommandOption,
+}
+
+enum CommandOption {
+    Import,
+    Update,
+    List,
+}
+
+impl Command {
+    fn build(args: &[String]) -> Result<Command, &'static str> {
+        if args.len() < 2 {
+            return Err("not enough arguments");
+        }
+        let name = args[1].clone();
+        match name.as_str() {
+            "import" => {
+                Ok(Command {
+                    name,
+                    description: "Import domains from Merlin".to_string(),
+                    action: CommandOption::Import,
+                })
+            }
+            "update" => {
+                Ok(Command {
+                    name,
+                    description: "Update domains from Merlin".to_string(),
+                    action: CommandOption::Update,
+                })
+            }
+            _ => Err("Command not found")
+        }
+    }
+}
+
+fn run(command: Command) {
+    match command {
+        Command { name, description, action } => {
+            println!("Command name: {}", name);
+            println!("Command description: {}", description);
+            match action {
+                CommandOption::Import => import(),
+                CommandOption::Update => update(),
+                CommandOption::List => println!("List command"),
+            }
+        }
     }
 
     let merlin_api_token = get_config_value("merlin_api_token");
     println!("Merlin API token, retrieved from config file: {}", merlin_api_token);
 }
 
-fn get_first_command_line_input() -> String {
-    let args: Vec<String> = env::args().collect();
-    let command = args[1].clone();
-    command
-}
-
 fn import() {
-    println!("import called");
+    println!("Import called");
     // @TODO: create import command chain
 }
 
 fn update() {
-    println!("update called");
+    println!("Update called");
     // @TODO: Create update command chain
 }
 
@@ -56,10 +103,14 @@ fn get_config_value(key: &str) -> String {
 
 fn get_config() -> String {
     let os_home_dir = env::var("HOME").unwrap();
-    let config_file = format!("{}/.{}", os_home_dir, CONFIG_FILE);
+    let config_file = format!("{}/{}", os_home_dir, CONFIG_FILE);
     match read_file_content(&config_file) {
         Ok(content) => content,
-        Err(_) => create_config_file()
+        Err(e) => {
+            println!("{}: {}", e, config_file);
+            println!("Creating config file...");
+            create_config_file()
+        }
     }
 }
 

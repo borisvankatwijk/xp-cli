@@ -77,19 +77,28 @@ fn read_file_content(file: &str) -> Result<String, std::io::Error> {
 }
 
 fn get_config_value(key: &str) -> String {
-    let mut value = String::new();
-    let config = get_config();
-    let lines = config.lines();
-    for line in lines {
-        if line.contains(key) {
-            let parts: Vec<&str> = line.split(":").collect();
-            value = parts[1].trim().to_string();
-        }
-    }
-    value
+    // @TODO: Further rewrite to return Option<String> instead of String
+    //          or returns a Result<String, Box<dyn Error>>
+    //        And perhaps improve readability, with better use of iterators / libs.
+    get_config()
+        .lines()
+        .filter(|line| line.contains(key))
+        .collect::<Vec<&str>>()
+        .first() // First line it matches
+        .unwrap_or_else(|| panic!("No entry found for key: {}", key))
+        .split(":")
+        .collect::<Vec<&str>>()
+        .last() // Last value of the split on ":"
+        .unwrap_or_else(|| panic!("No value found for key: {}", key))
+        .trim() // Trim to remove whitespace
+        .to_string()
 }
 
 fn get_config() -> String {
+
+    // @TODO: Rewrite to return an iterator and/or Vec<String> instead of String
+    //          Or returns a Result<String, Box<dyn Error>>
+
     let os_home_dir = env::var("HOME").unwrap();
     let config_file = format!("{}/{}", os_home_dir, CONFIG_FILE);
     match read_file_content(&config_file) {

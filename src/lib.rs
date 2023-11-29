@@ -17,24 +17,25 @@ enum CommandOption {
 }
 
 impl Command {
-    pub fn build(args: &[String]) -> Result<Command, &'static str> {
-        // @TODO Rewrite to make use of iterators effectively
+    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Command, &'static str> {
+        args.next(); // Skip first argument, which is the binary
 
-        if args.len() < 2 {
-            return Err("not enough arguments");
-        }
-        let name = args[1].clone();
-        match name.as_str() {
+        let command_name = match args.next() {
+            Some(arg) => arg,
+            None => return Err("No command provided")
+        };
+
+        match command_name.as_str() {
             "import" => {
                 Ok(Command {
-                    name,
+                    name: command_name,
                     description: "Import domains from Merlin".to_string(),
                     action: CommandOption::Import,
                 })
             }
             "update" => {
                 Ok(Command {
-                    name,
+                    name: command_name,
                     description: "Update domains from Merlin".to_string(),
                     action: CommandOption::Update,
                 })
@@ -43,7 +44,6 @@ impl Command {
         }
     }
 }
-
 
 pub fn run(command: Command) -> Result<(), Box<dyn Error>> {
     match command {

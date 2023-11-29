@@ -8,8 +8,7 @@ fn main() {
 
     // @TODO: Make use of clap library to parse command line arguments
 
-    let args: Vec<String> = env::args().collect();
-    let command = Command::build(&args).unwrap_or_else(|err| {
+    let command = Command::build(env::args()).unwrap_or_else(|err| {
         eprintln!("Problem parsing arguments: {}", err);
         process::exit(1);
     });

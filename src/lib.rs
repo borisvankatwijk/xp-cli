@@ -18,6 +18,8 @@ enum CommandOption {
 
 impl Command {
     pub fn build(args: &[String]) -> Result<Command, &'static str> {
+        // @TODO Rewrite to make use of iterators effectively
+
         if args.len() < 2 {
             return Err("not enough arguments");
         }
@@ -56,7 +58,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn Error>> {
         }
     }
 
-    let merlin_api_token = get_config_value("merlin_api_token");
+    let merlin_api_token = get_config_value("merlin_api_token")?;
     println!("Merlin API token, retrieved from config file: {}", merlin_api_token);
     Ok(())
 }
@@ -76,11 +78,9 @@ fn read_file_content(file: &str) -> Result<String, std::io::Error> {
     Ok(content)
 }
 
-fn get_config_value(key: &str) -> String {
-    // @TODO: Further rewrite to return Option<String> instead of String
-    //          or returns a Result<String, Box<dyn Error>>
-    //        And perhaps improve readability, with better use of iterators / libs.
-    get_config()
+fn get_config_value(key: &str) -> Result<String, Box<dyn Error>> {
+    // @TODO: Improve readability, with better use of iterators / libs.
+    let value = get_config()?
         .lines()
         .filter(|line| line.contains(key))
         .collect::<Vec<&str>>()
@@ -91,10 +91,11 @@ fn get_config_value(key: &str) -> String {
         .last() // Last value of the split on ":"
         .unwrap_or_else(|| panic!("No value found for key: {}", key))
         .trim() // Trim to remove whitespace
-        .to_string()
+        .to_string();
+    Ok(value)
 }
 
-fn get_config() -> String {
+fn get_config() -> Result<String, Box<dyn Error>> {
 
     // @TODO: Rewrite to return an iterator and/or Vec<String> instead of String
     //          Or returns a Result<String, Box<dyn Error>>
@@ -102,16 +103,17 @@ fn get_config() -> String {
     let os_home_dir = env::var("HOME").unwrap();
     let config_file = format!("{}/{}", os_home_dir, CONFIG_FILE);
     match read_file_content(&config_file) {
-        Ok(content) => content,
+        Ok(content) => Ok(content),
         Err(e) => {
             eprintln!("Reading file failed: {}", e);
             println!("Config file not loaded, creating one at {}", config_file);
-            create_config_file()
+            let config = create_config_file()?;
+            Ok(config)
         }
     }
 }
 
-fn create_config_file() -> String {
+fn create_config_file() -> Result<String, Box<dyn Error>> {
     let os_home_dir = env::var("HOME").unwrap();
     let config_file = format!("{}/{}", os_home_dir, CONFIG_FILE);
     println!("Please enter your Merlin API token:");
@@ -126,8 +128,7 @@ firstname: HappyHorizon
 lastname: Developer
 "#, os_home_dir, merlin_api_token);
     match std::fs::write(config_file, config_content.clone()) {
-        Ok(_) => config_content.to_string(),
-        Err(e) => panic!("Error creating config file: {}", e),
-        // @TODO: Remove panic and handle error gracefully
+        Ok(_) => Ok(config_content.to_string()),
+        Err(e) => Err(Box::new(e))
     }
 }

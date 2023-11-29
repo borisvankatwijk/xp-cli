@@ -1,3 +1,22 @@
+//! # xp_cli
+//!
+//! `xp_cli` is a command line interface for easy management of Magento 2 environments.
+//!
+//! It is mainly used to improve developer experience by automating repetitive tasks.
+//!
+//! ## Installation
+//!
+//! To install with cargo
+//! ```shell
+//! cargo install xp_cli
+//! ```
+//!
+//! Usage examples:
+//! ```shell
+//! xp_cli import
+//! xp_cli update
+//! ```
+
 use std::env;
 use std::io::stdin;
 use std::error::Error;
@@ -17,6 +36,8 @@ enum CommandOption {
 }
 
 impl Command {
+    /// Build a Command struct from the command line arguments
+    /// Current matches are "import" and "update"
     pub fn build(mut args: impl Iterator<Item = String>) -> Result<Command, &'static str> {
         args.next(); // Skip first argument, which is the binary
 
@@ -44,7 +65,7 @@ impl Command {
         }
     }
 }
-
+/// Run the command given by the user in the CLI
 pub fn run(command: Command) -> Result<(), Box<dyn Error>> {
     match command {
         Command { name, description, action } => {

@@ -18,8 +18,9 @@
 //! ```
 
 use std::env;
-use std::io::stdin;
+use std::io::{stdin, Write};
 use std::error::Error;
+// @TODO: Add the most relevant lib use here, instead of inline in the code
 
 const CONFIG_FILE: &str = ".xp-cli-rust.yml";
 
@@ -38,7 +39,7 @@ enum CommandOption {
 impl Command {
     /// Build a Command struct from the command line arguments
     /// Current matches are "import" and "update"
-    pub fn build(mut args: impl Iterator<Item = String>) -> Result<Command, &'static str> {
+    pub fn build(mut args: impl Iterator<Item=String>) -> Result<Command, &'static str> {
         args.next(); // Skip first argument, which is the binary
 
         let command_name = match args.next() {
@@ -65,6 +66,7 @@ impl Command {
         }
     }
 }
+
 /// Run the command given by the user in the CLI
 pub fn run(command: Command) -> Result<(), Box<dyn Error>> {
     match command {
@@ -74,24 +76,114 @@ pub fn run(command: Command) -> Result<(), Box<dyn Error>> {
             match action {
                 CommandOption::Import => import(),
                 CommandOption::Update => update(),
-                CommandOption::List => println!("List command"),
+                CommandOption::List => {
+                    println!("List command");
+                    Ok(())
+                }
             }
         }
     }
+}
 
-    let merlin_api_token = get_config_value("merlin_api_token")?;
-    println!("Merlin API token, retrieved from config file: {}", merlin_api_token);
+fn import() -> Result<(), Box<dyn Error>> {
+    let os_home_dir = env::var("HOME").unwrap() + "/domains/";
+
+    print!("Existing domains:");
+    std::fs::read_dir(&os_home_dir)?
+        .filter_map(|entry| entry.ok())
+        .for_each(|entry| print!(" {}", entry.file_name().into_string().unwrap()));
+    println!();
+    println!("Please enter a directory name:");
+    let mut directory_name = String::new();
+    stdin().read_line(&mut directory_name)
+        .expect("No valid string was found for directory_name");
+
+    // Trim whitespaces of input
+    let mut directory_name = directory_name.trim();
+
+    // Validate for alphanumeric, "-" and "_"
+    if !directory_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Invalid directory name, only alphanumeric, \"-\" and \"_\" are allowed",
+        )));
+    }
+
+    let directory_name = os_home_dir + directory_name;
+
+    // Check if the directory exists, create it if it doesn't
+    if !std::path::Path::new(&directory_name).exists() {
+        match std::fs::create_dir(&directory_name) {
+            Ok(_) => println!("Directory {} created", directory_name),
+            Err(e) => println!("Directory {} already exists", directory_name),
+        }
+    }
+
+    // Ask for a backup ID
+    println!("Please enter a backup ID:");
+    let mut backup_id = String::new();
+    stdin().read_line(&mut backup_id)
+        .expect("No valid string was found for backup_id");
+
+    // Trim whitespaces
+    let backup_id = backup_id.trim();
+
+    // Validate input is numeric
+    if !backup_id.trim().chars().all(|c| c.is_numeric()) {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Invalid backup ID, only numeric values are allowed",
+        )));
+    }
+
+    // To test rewrite it to @TODO: Remove
+    let backup_id = "108987";
+
+    download_merlin_backup_file("files.tar.gz", &backup_id, &directory_name);
+    download_merlin_backup_file("structure.sql", &backup_id, &directory_name);
+    download_merlin_backup_file("data.sql", &backup_id, &directory_name);
+
+    // @TODO: Introduce spontaneous downloads for all three files, using threads
+
     Ok(())
 }
 
-fn import() {
-    println!("Import called");
-    // @TODO: create import command chain
+fn download_merlin_backup_file(
+    filename: &str,
+    backup_id: &str,
+    directory: &str,
+) -> () {
+    // @TODO: Add check to see if file already exists, and skip download if that's the case.
+
+    let file_destination = format!("{}/{}", directory, filename);
+    let file_to_download = format!(
+        "https://merlin.experius.nl/backups/download/{}/{}?token={}",
+        backup_id,
+        filename,
+        get_config_value("merlin_api_token").unwrap()
+    );
+
+    println!("Downloading {} to {}:", file_to_download, file_destination);
+    // Run the curl command to download the file with a progress bar
+    let status = std::process::Command::new("curl")
+        .arg("--progress-bar")
+        .arg("-o")
+        .arg(file_destination)
+        .arg(file_to_download)
+        .status()
+        .expect("Failed to run curl command");
+
+    if status.success() {
+        println!("File downloaded successfully!");
+    } else {
+        eprintln!("Failed to download file. Curl command exited with an error.");
+    }
 }
 
-fn update() {
+fn update() -> Result<(), Box<dyn Error>> {
     println!("Update called");
     // @TODO: Create update command chain
+    Ok(())
 }
 
 fn read_file_content(file: &str) -> Result<String, std::io::Error> {

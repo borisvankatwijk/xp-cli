@@ -140,19 +140,26 @@ fn import() -> Result<(), Box<dyn Error>> {
     // To test rewrite it to @TODO: Remove
     let backup_id = "108987";
 
+    // Parallel download of the files
+    let mut thread_handles = vec![];
     for filename in ["files.tar.gz", "structure.sql", "data.sql"].iter() {
-        download_merlin_backup_file(filename, &backup_id, &directory_name)?;
-
-        // @TODO: Introduce concurrency for the downloads
-        // let backup_id_clone = backup_id.clone();
-        // let directory_name_clone = directory_name.clone();
-        // let thread = thread::spawn(move || {
-        //     download_merlin_backup_file(filename, &backup_id_clone, &directory_name_clone)?;
-        // });
-        // thread.join().unwrap();
+        let backup_id_clone = backup_id.clone();
+        let directory_name_clone = directory_name.clone();
+        let handle = thread::spawn(move || {
+            match download_merlin_backup_file(filename, &backup_id_clone, &directory_name_clone) {
+                Ok(_) => {},
+                Err(e) => println!("Download failed: {}", e),
+            }
+        });
+        thread_handles.push(handle);
     }
 
-    // @TODO: Introduce spontaneous downloads for all three files, using threads
+    // Wait for all downloads in the threads to finish
+    for handle in thread_handles {
+        handle.join().unwrap();
+    }
+
+    // @TODO Continue with the next import steps
 
     Ok(())
 }
@@ -162,11 +169,12 @@ fn download_merlin_backup_file(
     backup_id: &str,
     directory: &str,
 ) -> Result<(), Box<dyn Error>> {
+    let print_prefix = format!("{: <15}", format!("[{}]", filename));
     let file_destination = format!("{}/{}", directory, filename);
 
     // Check if file already exists, skip download if it does
     if std::path::Path::new(&file_destination).exists() {
-        println!("File {} already exists, skipping download", file_destination);
+        println!("{} File {} already exists, skipping download", print_prefix, file_destination);
         return Ok(());
     }
 
@@ -177,7 +185,7 @@ fn download_merlin_backup_file(
         get_config_value("merlin_api_token").unwrap()
     );
 
-    println!("Checking file availability");
+    // Check if the file exists on the server
     let output = std::process::Command::new("curl")
         .arg("--head")
         .arg("--silent")
@@ -187,13 +195,9 @@ fn download_merlin_backup_file(
         .arg("%{http_code}")
         .arg(&download_url)
         .output()?;
-
     let http_status_code = String::from_utf8_lossy(&output.stdout).trim().to_string();
     let status_code = http_status_code.parse::<u16>()?;
-
-    if status_code == 200 {
-        println!("File available for download");
-    } else {
+    if status_code != 200 {
         return Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!(
@@ -204,21 +208,20 @@ fn download_merlin_backup_file(
         )));
     }
 
-    println!("Downloading {} to {}:", download_url, file_destination);
-
-    // Run the curl command to download the file with a progress bar
+    println!("{} Downloading {} to {}", print_prefix, download_url, file_destination);
     let status = std::process::Command::new("curl")
-        .arg("--progress-bar")
+        .arg("--silent")
         .arg("-o")
         .arg(file_destination) // Move occurs, which is ok because it is no longer used
         .arg(download_url) // Move occurs, which is ok because it is no longer used
         .status()?;
 
     if status.success() {
-        println!("File downloaded successful.");
+        println!("{} Downloaded successful", print_prefix);
     } else {
-        println!("File downloaded failed.");
+        println!("{} Downloaded failed", print_prefix);
     }
+
     Ok(())
 }
 

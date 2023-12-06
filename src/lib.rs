@@ -162,15 +162,21 @@ fn download_merlin_backup_file(
     backup_id: &str,
     directory: &str,
 ) -> Result<(), Box<dyn Error>> {
-    // @TODO: Add check to see if file already exists, and skip download if that's the case.
-
     let file_destination = format!("{}/{}", directory, filename);
-    let file_to_download = format!(
+
+    // Check if file already exists, skip download if it does
+    if std::path::Path::new(&file_destination).exists() {
+        println!("File {} already exists, skipping download", file_destination);
+        return Ok(());
+    }
+
+    let download_url = format!(
         "https://merlin.experius.nl/backups/download/{}/{}?token={}",
         backup_id,
         filename,
         get_config_value("merlin_api_token").unwrap()
     );
+
     println!("Checking file availability");
     let output = std::process::Command::new("curl")
         .arg("--head")
@@ -179,7 +185,7 @@ fn download_merlin_backup_file(
         .arg("/dev/null")
         .arg("--write-out")
         .arg("%{http_code}")
-        .arg(&file_to_download)
+        .arg(&download_url)
         .output()?;
 
     let http_status_code = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -192,20 +198,20 @@ fn download_merlin_backup_file(
             std::io::ErrorKind::Other,
             format!(
                 "File {} could not be downloaded, status code {} given",
-                file_to_download,
+                download_url,
                 status_code
             ),
         )));
     }
 
-    println!("Downloading {} to {}:", file_to_download, file_destination);
+    println!("Downloading {} to {}:", download_url, file_destination);
 
     // Run the curl command to download the file with a progress bar
     let status = std::process::Command::new("curl")
         .arg("--progress-bar")
         .arg("-o")
         .arg(file_destination) // Move occurs, which is ok because it is no longer used
-        .arg(file_to_download) // Move occurs, which is ok because it is no longer used
+        .arg(download_url) // Move occurs, which is ok because it is no longer used
         .status()?;
 
     if status.success() {

@@ -20,6 +20,7 @@
 use std::env;
 use std::io::{stdin, Write};
 use std::error::Error;
+use std::thread;
 // @TODO: Add the most relevant lib use here, instead of inline in the code
 
 const CONFIG_FILE: &str = ".xp-cli-rust.yml";
@@ -139,9 +140,17 @@ fn import() -> Result<(), Box<dyn Error>> {
     // To test rewrite it to @TODO: Remove
     let backup_id = "108987";
 
-    download_merlin_backup_file("files.tar.gz", &backup_id, &directory_name);
-    download_merlin_backup_file("structure.sql", &backup_id, &directory_name);
-    download_merlin_backup_file("data.sql", &backup_id, &directory_name);
+    for filename in ["files.tar.gz", "structure.sql", "data.sql"].iter() {
+        download_merlin_backup_file(filename, &backup_id, &directory_name)?;
+
+        // @TODO: Introduce concurrency for the downloads
+        // let backup_id_clone = backup_id.clone();
+        // let directory_name_clone = directory_name.clone();
+        // let thread = thread::spawn(move || {
+        //     download_merlin_backup_file(filename, &backup_id_clone, &directory_name_clone)?;
+        // });
+        // thread.join().unwrap();
+    }
 
     // @TODO: Introduce spontaneous downloads for all three files, using threads
 
@@ -152,7 +161,7 @@ fn download_merlin_backup_file(
     filename: &str,
     backup_id: &str,
     directory: &str,
-) -> () {
+) -> Result<(), Box<dyn Error>> {
     // @TODO: Add check to see if file already exists, and skip download if that's the case.
 
     let file_destination = format!("{}/{}", directory, filename);
@@ -162,22 +171,49 @@ fn download_merlin_backup_file(
         filename,
         get_config_value("merlin_api_token").unwrap()
     );
+    println!("Checking file availability");
+    let output = std::process::Command::new("curl")
+        .arg("--head")
+        .arg("--silent")
+        .arg("--output")
+        .arg("/dev/null")
+        .arg("--write-out")
+        .arg("%{http_code}")
+        .arg(&file_to_download)
+        .output()?;
+
+    let http_status_code = String::from_utf8_lossy(&output.stdout).trim().to_string();
+    let status_code = http_status_code.parse::<u16>()?;
+
+    if status_code == 200 {
+        println!("File available for download");
+    } else {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!(
+                "File {} could not be downloaded, status code {} given",
+                file_to_download,
+                status_code
+            ),
+        )));
+    }
 
     println!("Downloading {} to {}:", file_to_download, file_destination);
+
     // Run the curl command to download the file with a progress bar
     let status = std::process::Command::new("curl")
         .arg("--progress-bar")
         .arg("-o")
-        .arg(file_destination)
-        .arg(file_to_download)
-        .status()
-        .expect("Failed to run curl command");
+        .arg(file_destination) // Move occurs, which is ok because it is no longer used
+        .arg(file_to_download) // Move occurs, which is ok because it is no longer used
+        .status()?;
 
     if status.success() {
-        println!("File downloaded successfully!");
+        println!("File downloaded successful.");
     } else {
-        eprintln!("Failed to download file. Curl command exited with an error.");
+        println!("File downloaded failed.");
     }
+    Ok(())
 }
 
 fn update() -> Result<(), Box<dyn Error>> {

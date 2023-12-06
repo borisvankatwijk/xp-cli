@@ -17,11 +17,7 @@
 //! xp_cli update
 //! ```
 
-use std::env;
-use std::io::{stdin, Write};
 use std::error::Error;
-use std::thread;
-// @TODO: Add the most relevant lib use here, instead of inline in the code
 
 const CONFIG_FILE: &str = ".xp-cli-rust.yml";
 
@@ -34,7 +30,7 @@ pub struct Command {
 enum CommandOption {
     Import,
     Update,
-    List,
+    List, // @TODO: Make use of List type to list all available commands
 }
 
 impl Command {
@@ -87,7 +83,7 @@ pub fn run(command: Command) -> Result<(), Box<dyn Error>> {
 }
 
 fn import() -> Result<(), Box<dyn Error>> {
-    let os_home_dir = env::var("HOME").unwrap() + "/domains/";
+    let os_home_dir = std::env::var("HOME").unwrap() + "/domains/";
 
     print!("Existing domains:");
     std::fs::read_dir(&os_home_dir)?
@@ -96,7 +92,7 @@ fn import() -> Result<(), Box<dyn Error>> {
     println!();
     println!("Please enter a directory name:");
     let mut directory_name = String::new();
-    stdin().read_line(&mut directory_name)
+    std::io::stdin().read_line(&mut directory_name)
         .expect("No valid string was found for directory_name");
 
     // Trim whitespaces of input
@@ -123,7 +119,7 @@ fn import() -> Result<(), Box<dyn Error>> {
     // Ask for a backup ID
     println!("Please enter a backup ID:");
     let mut backup_id = String::new();
-    stdin().read_line(&mut backup_id)
+    std::io::stdin().read_line(&mut backup_id)
         .expect("No valid string was found for backup_id");
 
     // Trim whitespaces
@@ -138,14 +134,15 @@ fn import() -> Result<(), Box<dyn Error>> {
     }
 
     // Parallel download of the files
+    println!("Starting download of backup files in parallel");
     let mut thread_handles = vec![];
     for filename in ["files.tar.gz", "structure.sql", "data.sql"].into_iter() {
         let backup_id_clone = backup_id.clone();
         let directory_name_clone = directory_name.clone();
-        let handle = thread::spawn(move || {
+        let handle = std::thread::spawn(move || {
             match download_merlin_backup_file(filename, &backup_id_clone, &directory_name_clone) {
-                Ok(_) => {},
-                Err(e) => println!("Download failed: {}", e),
+                Ok(_) => {}
+                Err(e) => println!("Download failed: {}", e)
             }
         });
         thread_handles.push(handle);
@@ -166,12 +163,12 @@ fn download_merlin_backup_file(
     backup_id: &str,
     directory: &str,
 ) -> Result<(), Box<dyn Error>> {
-    let print_prefix = format!("{: <15}", format!("[{}]", filename));
+    let print_prefix = format!("  {: <20}", format!("[{}]", filename));
     let file_destination = format!("{}/{}", directory, filename);
 
     // Check if file already exists, skip download if it does
     if std::path::Path::new(&file_destination).exists() {
-        println!("{} File {} already exists, skipping download", print_prefix, file_destination);
+        println!("{} Skipped, {} already exists", print_prefix, file_destination);
         return Ok(());
     }
 
@@ -198,7 +195,7 @@ fn download_merlin_backup_file(
         return Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!(
-                "File {} could not be downloaded, status code {} given",
+                "Failed, {} could not download, status code {} given",
                 download_url,
                 status_code
             ),
@@ -214,9 +211,9 @@ fn download_merlin_backup_file(
         .status()?;
 
     if status.success() {
-        println!("{} Downloaded successful", print_prefix);
+        println!("{} Succeeded", print_prefix);
     } else {
-        println!("{} Downloaded failed", print_prefix);
+        println!("{} Failed", print_prefix);
     }
 
     Ok(())
@@ -228,7 +225,7 @@ fn update() -> Result<(), Box<dyn Error>> {
     Ok(())
 }
 
-fn read_file_content(file: &str) -> Result<String, std::io::Error> {
+fn read_file_content(file: &str) -> Result<String, Box<dyn Error>> {
     let content = std::fs::read_to_string(file)?;
     Ok(content)
 }
@@ -251,11 +248,7 @@ fn get_config_value(key: &str) -> Result<String, Box<dyn Error>> {
 }
 
 fn get_config() -> Result<String, Box<dyn Error>> {
-
-    // @TODO: Rewrite to return an iterator and/or Vec<String> instead of String
-    //          Or returns a Result<String, Box<dyn Error>>
-
-    let os_home_dir = env::var("HOME").unwrap();
+    let os_home_dir = std::env::var("HOME").unwrap();
     let config_file = format!("{}/{}", os_home_dir, CONFIG_FILE);
     match read_file_content(&config_file) {
         Ok(content) => Ok(content),
@@ -269,11 +262,11 @@ fn get_config() -> Result<String, Box<dyn Error>> {
 }
 
 fn create_config_file() -> Result<String, Box<dyn Error>> {
-    let os_home_dir = env::var("HOME").unwrap();
+    let os_home_dir = std::env::var("HOME").unwrap();
     let config_file = format!("{}/{}", os_home_dir, CONFIG_FILE);
     println!("Please enter your Merlin API token:");
     let mut merlin_api_token = String::new();
-    stdin().read_line(&mut merlin_api_token).expect("No valid string was found for merlin_api_token");
+    std::io::stdin().read_line(&mut merlin_api_token).expect("No valid string was found for merlin_api_token");
     let config_content = format!(r#"domains_path: {}/domains
 merlin_api_token: {}
 username: magento

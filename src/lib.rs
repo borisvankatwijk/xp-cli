@@ -100,7 +100,7 @@ fn import() -> Result<(), Box<dyn Error>> {
         .expect("No valid string was found for directory_name");
 
     // Trim whitespaces of input
-    let mut directory_name = directory_name.trim();
+    let directory_name = directory_name.trim();
 
     // Validate for alphanumeric, "-" and "_"
     if !directory_name.chars().all(|c| c.is_alphanumeric() || c == '-' || c == '_') {
@@ -116,7 +116,7 @@ fn import() -> Result<(), Box<dyn Error>> {
     if !std::path::Path::new(&directory_name).exists() {
         match std::fs::create_dir(&directory_name) {
             Ok(_) => println!("Directory {} created", directory_name),
-            Err(e) => println!("Directory {} already exists", directory_name),
+            Err(_) => println!("Directory {} already exists", directory_name),
         }
     }
 
@@ -127,22 +127,19 @@ fn import() -> Result<(), Box<dyn Error>> {
         .expect("No valid string was found for backup_id");
 
     // Trim whitespaces
-    let backup_id = backup_id.trim();
+    let backup_id = String::from(backup_id.trim());
 
     // Validate input is numeric
-    if !backup_id.trim().chars().all(|c| c.is_numeric()) {
+    if !backup_id.chars().all(|c| c.is_numeric()) {
         return Err(Box::new(std::io::Error::new(
             std::io::ErrorKind::Other,
             "Invalid backup ID, only numeric values are allowed",
         )));
     }
 
-    // To test rewrite it to @TODO: Remove
-    let backup_id = "108987";
-
     // Parallel download of the files
     let mut thread_handles = vec![];
-    for filename in ["files.tar.gz", "structure.sql", "data.sql"].iter() {
+    for filename in ["files.tar.gz", "structure.sql", "data.sql"].into_iter() {
         let backup_id_clone = backup_id.clone();
         let directory_name_clone = directory_name.clone();
         let handle = thread::spawn(move || {

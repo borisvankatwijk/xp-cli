@@ -18,6 +18,7 @@
 //! ```
 
 use std::error::Error;
+use std::io::Write;
 
 const CONFIG_FILE: &str = ".xp-cli-rust.yml";
 
@@ -85,10 +86,10 @@ pub fn run(command: Command) -> Result<(), Box<dyn Error>> {
 fn import() -> Result<(), Box<dyn Error>> {
     let os_home_dir = std::env::var("HOME").unwrap() + "/domains/";
 
-    print!("Existing domains:");
+    print!("\x1b[32m{}\x1b[0m", "Existing domains:");
     std::fs::read_dir(&os_home_dir)?
         .filter_map(|entry| entry.ok())
-        .for_each(|entry| print!(" {}", entry.file_name().into_string().unwrap()));
+        .for_each(|entry| print!(" \"\x1b[33m{}\x1b[0m\"", entry.file_name().into_string().unwrap()));
     println!();
     println!("Please enter a directory name:");
     let mut directory_name = String::new();
@@ -106,13 +107,13 @@ fn import() -> Result<(), Box<dyn Error>> {
         )));
     }
 
-    let directory_name = os_home_dir + directory_name;
+    let directory_path = os_home_dir + directory_name;
 
     // Check if the directory exists, create it if it doesn't
-    if !std::path::Path::new(&directory_name).exists() {
-        match std::fs::create_dir(&directory_name) {
-            Ok(_) => println!("Directory {} created", directory_name),
-            Err(_) => println!("Directory {} already exists", directory_name),
+    if !std::path::Path::new(&directory_path).exists() {
+        match std::fs::create_dir(&directory_path) {
+            Ok(_) => println!("Directory {} created", directory_path),
+            Err(_) => println!("Directory {} already exists", directory_path),
         }
     }
 
@@ -133,14 +134,13 @@ fn import() -> Result<(), Box<dyn Error>> {
         )));
     }
 
-    // Parallel download of the files
-    println!("Starting download of backup files in parallel");
+    println!("\x1b[32m{}\x1b[0m", "Starting download of backup files in parallel");
     let mut thread_handles = vec![];
     for filename in ["files.tar.gz", "structure.sql", "data.sql"].into_iter() {
         let backup_id_clone = backup_id.clone();
-        let directory_name_clone = directory_name.clone();
+        let directory_path_clone = directory_path.clone();
         let handle = std::thread::spawn(move || {
-            match download_merlin_backup_file(filename, &backup_id_clone, &directory_name_clone) {
+            match download_merlin_backup_file(filename, &backup_id_clone, &directory_path_clone) {
                 Ok(_) => {}
                 Err(e) => println!("Download failed: {}", e)
             }
@@ -153,8 +153,84 @@ fn import() -> Result<(), Box<dyn Error>> {
         handle.join().unwrap();
     }
 
+    extract_files_tar_gz(&directory_path)?;
+
+    // Warden svc up
+    println!("\x1b[33m{}\x1b[0m", "warden svc up");
+    std::process::Command::new("warden")
+        .arg("svc")
+        .arg("up")
+        .spawn()?
+        .wait_with_output()?;
+
+    println!("\x1b[33m{}\x1b[0m", "warden env-init 'env' magento2");
+    let mut child = std::process::Command::new("warden")
+        .arg("env-init")
+        .arg(&directory_name)
+        .arg("magento2")
+        .current_dir(&directory_path)
+        .stdin(std::process::Stdio::piped())
+        .spawn()?;
+
+    // @TODO Determine if this is necessary/the best approach
+    // Automatically answer yes to the question "Do you want to override the existing env?"
+    if let Some(mut stdin) = child.stdin.take() {
+        stdin.write_all(b"y\n")?;
+    }
+
+    child.wait_with_output()?;
+
+    // Warden env up command printed in yellow
+    println!("\x1b[33m{}\x1b[0m", "warden env up");
+    std::process::Command::new("warden")
+        .arg("env")
+        .arg("up")
+        .current_dir(&directory_path)
+        .spawn()?
+        .wait_with_output()?;
+
     // @TODO Continue with the next import steps
 
+    // @TODO: Remove env shutdown, since it's for testing purposes only
+
+    println!("\x1b[31m{}\x1b[0m", "warden env down");
+    std::process::Command::new("warden")
+        .arg("env")
+        .arg("down")
+        .current_dir(&directory_path)
+        .spawn()?
+        .wait_with_output()?;
+
+    println!("\x1b[31m{}\x1b[0m", "warden svc down");
+    std::process::Command::new("warden")
+        .arg("svc")
+        .arg("down")
+        .spawn()?
+        .wait_with_output()?;
+
+    Ok(())
+}
+
+fn extract_files_tar_gz(directory_path: &str) -> Result<(), Box<dyn Error>> {
+    println!("Extracting files.tar.gz, please wait a moment");
+
+    std::process::Command::new("tar")
+        .arg("--gunzip")
+        .arg("--extract")
+        .arg("--skip-old-files")
+        .arg("-f") // File
+        .arg("files.tar.gz")
+        .arg("--exclude=.idea")
+        .arg("--exclude=pub/media/catalog/product/*")
+        .arg("--exclude=media/catalog/product/*")
+        .arg("--exclude=var/log/*")
+        .arg("--exclude=var/report/*")
+        .arg("--exclude=var/cache/*")
+        .arg("--exclude=var/page_cache/*")
+        .current_dir(directory_path)
+        .spawn()?
+        .wait_with_output()?;
+    println!("Extracting files.tar.gz succeeded");
     Ok(())
 }
 
